@@ -48,6 +48,7 @@ class BacktesterManager(QtWidgets.QWidget):
         self.register_event()
         self.backtester_engine.init_engine()
         self.init_strategy_settings()
+        self.init_uisetting()
 
     def init_strategy_settings(self):
         """"""
@@ -58,6 +59,34 @@ class BacktesterManager(QtWidgets.QWidget):
             self.settings[class_name] = setting
 
         self.class_combo.addItems(self.class_names)
+
+    def init_uisetting(self):
+        # Load setting
+        setting = load_json(self.setting_filename)
+        if not setting:
+            return
+
+        self.class_combo.setCurrentIndex(
+            self.class_combo.findText(setting["class_name"])
+        )
+
+        self.symbol_line.setText(setting["vt_symbol"])
+
+        self.interval_combo.setCurrentIndex(
+            self.interval_combo.findText(setting["interval"])
+        )
+
+        self.rate_line.setText(str(setting["rate"]))
+        self.slippage_line.setText(str(setting["slippage"]))
+        self.size_line.setText(str(setting["size"]))
+        self.pricetick_line.setText(str(setting["pricetick"]))
+        self.capital_line.setText(str(setting["capital"]))
+
+        if not setting["inverse"]:
+            self.inverse_combo.setCurrentIndex(0)
+        else:
+            self.inverse_combo.setCurrentIndex(1)
+
 
     def init_ui(self):
         """"""
@@ -73,7 +102,7 @@ class BacktesterManager(QtWidgets.QWidget):
             self.interval_combo.addItem(inteval.value)
 
         end_dt = datetime.now()
-        start_dt = end_dt - timedelta(days=3 * 365)
+        start_dt = datetime(2010, 1, 1)
 
         self.start_date_edit = QtWidgets.QDateEdit(
             QtCore.QDate(
@@ -220,32 +249,6 @@ class BacktesterManager(QtWidgets.QWidget):
 
         # Code Editor
         self.editor = CodeEditor(self.main_engine, self.event_engine)
-
-        # Load setting
-        setting = load_json(self.setting_filename)
-        if not setting:
-            return
-
-        self.class_combo.setCurrentIndex(
-            self.class_combo.findText(setting["class_name"])
-        )
-
-        self.symbol_line.setText(setting["vt_symbol"])
-
-        self.interval_combo.setCurrentIndex(
-            self.interval_combo.findText(setting["interval"])
-        )
-
-        self.rate_line.setText(str(setting["rate"]))
-        self.slippage_line.setText(str(setting["slippage"]))
-        self.size_line.setText(str(setting["size"]))
-        self.pricetick_line.setText(str(setting["pricetick"]))
-        self.capital_line.setText(str(setting["capital"]))
-
-        if not setting["inverse"]:
-            self.inverse_combo.setCurrentIndex(0)
-        else:
-            self.inverse_combo.setCurrentIndex(1)
 
     def register_event(self):
         """"""

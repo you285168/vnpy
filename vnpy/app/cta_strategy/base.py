@@ -48,6 +48,7 @@ EVENT_CTA_STOPORDER = "eCtaStopOrder"
 
 INTERVAL_DELTA_MAP = {
     Interval.MINUTE: timedelta(minutes=1),
+    Interval.HALF_HOUR: timedelta(minutes=30),
     Interval.HOUR: timedelta(hours=1),
     Interval.DAILY: timedelta(days=1),
 }
