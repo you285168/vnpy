@@ -42,6 +42,15 @@ class CtaTemplate(ABC):
 
         self.update_setting(setting)
 
+    def get_new_bar_price(self, bar):
+        return bar.close_price
+
+    def get_new_bar_datatime(self, bar):
+        return bar.datetime
+
+    def get_name(self):
+        return self.strategy_name
+
     def update_setting(self, setting: dict):
         """
         Update strategy parameter wtih value in setting dict.
@@ -91,6 +100,18 @@ class CtaTemplate(ABC):
             "variables": self.get_variables(),
         }
         return strategy_data
+
+    def get_like_symbol(self, symbol):
+        """
+        load data with like symbol
+        """
+        return None
+
+    def init_history(self, history_data):
+        """
+        init history bar data
+        """
+        pass
 
     @virtual
     def on_init(self):

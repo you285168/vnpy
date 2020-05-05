@@ -315,6 +315,7 @@ class ArrayManager(object):
         self.close_array: np.ndarray = np.zeros(size)
         self.volume_array: np.ndarray = np.zeros(size)
         self.open_interest_array: np.ndarray = np.zeros(size)
+        self.extra_array: np.ndarray = np.zeros(size)
 
     def update_bar(self, bar: BarData) -> None:
         """
@@ -337,6 +338,21 @@ class ArrayManager(object):
         self.close_array[-1] = bar.close_price
         self.volume_array[-1] = bar.volume
         self.open_interest_array[-1] = bar.open_interest
+
+    def update_extra(self, extra) -> None:
+        """
+        Update new extra data into array manager.
+        """
+        self.extra_array[:-1] = self.extra_array[1:]
+
+        self.extra_array[-1] = extra
+
+    @property
+    def extra(self) -> np.ndarray:
+        """
+        Get extra data time series.
+        """
+        return self.extra_array
 
     @property
     def open(self) -> np.ndarray:

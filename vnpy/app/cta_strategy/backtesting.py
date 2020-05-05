@@ -124,7 +124,8 @@ class BacktestingEngine:
         self.strategy_class = None
         self.strategy = None
         self.tick: TickData
-        self.bar: BarData
+        self.bar = None
+        self.order_bar: BarData
         self.datetime = None
 
         self.interval = None
@@ -155,6 +156,7 @@ class BacktestingEngine:
         self.strategy = None
         self.tick = None
         self.bar = None
+        self.order_bar = None
         self.datetime = None
 
         self.stop_order_count = 0
@@ -195,8 +197,11 @@ class BacktestingEngine:
         self.pricetick = pricetick
         self.start = start
 
-        self.symbol, exchange_str = self.vt_symbol.split(".")
-        self.exchange = Exchange(exchange_str)
+        temp = self.vt_symbol.split(".")
+        self.symbol = temp[0]
+        if len(temp) > 1:
+            exchange_str = temp[1]
+            self.exchange = Exchange(exchange_str)
 
         self.capital = capital
         self.end = end
@@ -237,13 +242,31 @@ class BacktestingEngine:
             end = min(end, self.end)  # Make sure end time stays within set range
 
             if self.mode == BacktestingMode.BAR:
+                like = self.strategy.get_like_symbol(self.symbol)
+
                 data = load_bar_data(
                     self.symbol,
                     self.exchange,
                     self.interval,
                     start,
-                    end
+                    end,
+                    like
                 )
+
+                if like:
+                    temp_data = data[:]
+                    data = []
+                    old_time = None
+                    temp = {}
+                    for bar in temp_data:
+                        if bar.datetime != old_time:
+                            old_time = bar.datetime
+                            if len(temp) > 0:
+                                data.append(temp)
+                                temp = {}
+                        temp[bar.symbol] = bar
+                    if len(temp) > 0:
+                        data.append(temp)
             else:
                 data = load_tick_data(
                     self.symbol,
@@ -272,18 +295,20 @@ class BacktestingEngine:
             func = self.new_tick
 
         self.strategy.on_init()
+        self.strategy.init_history(self.history_data)
 
         # Use the first [days] of history data for initializing strategy
         day_count = 0
         ix = 0
 
         for ix, data in enumerate(self.history_data):
-            if self.datetime and data.datetime.day != self.datetime.day:
+            bardate = self.strategy.get_new_bar_datatime(data)
+            if self.datetime and bardate.day != self.datetime.day:
                 day_count += 1
                 if day_count >= self.days:
                     break
 
-            self.datetime = data.datetime
+            self.datetime = bardate
 
             try:
                 self.callback(data)
@@ -325,15 +350,18 @@ class BacktestingEngine:
             daily_result.add_trade(trade)
 
         # Calculate daily result by iteration.
-        pre_close = 0
-        start_pos = 0
+        pre_close = None
+        start_pos = None
 
+        rate = self.rate
+        if self.strategy.get_name() == 'AllFutureStrategy':
+            rate = self.strategy.get_future_rate()
         for daily_result in self.daily_results.values():
             daily_result.calculate_pnl(
                 pre_close,
                 start_pos,
                 self.size,
-                self.rate,
+                rate,
                 self.slippage,
                 self.inverse
             )
@@ -731,26 +759,39 @@ class BacktestingEngine:
 
         return results
 
-    def update_daily_close(self, price: float):
+    def update_daily_close(self, price):
         """"""
         d = self.datetime.date()
-
-        daily_result = self.daily_results.get(d, None)
-        if daily_result:
-            daily_result.close_price = price
+        if self.strategy.get_name() == 'AllFutureStrategy':
+            daily_result = self.daily_results.get(d, None)
+            if not daily_result:
+                self.daily_results[d] = DayDailyResult(d, price)
         else:
-            self.daily_results[d] = DailyResult(d, price)
+            daily_result = self.daily_results.get(d, None)
+            if daily_result:
+                daily_result.close_price = price
+            else:
+                self.daily_results[d] = DailyResult(d, price)
 
-    def new_bar(self, bar: BarData):
+    def get_current_bar(self, symbol):
+        if type(self.bar) is dict:
+            return self.bar.get(symbol, None)
+        else:
+            return self.bar
+
+    def set_order_bar(self, bar):
+        self.order_bar = bar
+
+    def new_bar(self, data):
         """"""
-        self.bar = bar
-        self.datetime = bar.datetime
+        self.bar = data
+        self.datetime = self.strategy.get_new_bar_datatime(data)
 
         self.cross_limit_order()
         self.cross_stop_order()
-        self.strategy.on_bar(bar)
+        self.strategy.on_bar(data)
 
-        self.update_daily_close(bar.close_price)
+        self.update_daily_close(self.strategy.get_new_bar_price(data))
 
     def new_tick(self, tick: TickData):
         """"""
@@ -767,22 +808,30 @@ class BacktestingEngine:
         """
         Cross limit order with last bar/tick data.
         """
-        if self.mode == BacktestingMode.BAR:
-            long_cross_price = self.bar.low_price
-            short_cross_price = self.bar.high_price
-            long_best_price = self.bar.open_price
-            short_best_price = self.bar.open_price
-        else:
-            long_cross_price = self.tick.ask_price_1
-            short_cross_price = self.tick.bid_price_1
-            long_best_price = long_cross_price
-            short_best_price = short_cross_price
-
         for order in list(self.active_limit_orders.values()):
+            if self.mode == BacktestingMode.BAR:
+                bar = self.get_current_bar(order.symbol)
+                if not bar:
+                    continue
+                long_cross_price = bar.low_price
+                short_cross_price = bar.high_price
+                long_best_price = bar.open_price
+                short_best_price = bar.open_price
+            else:
+                long_cross_price = self.tick.ask_price_1
+                short_cross_price = self.tick.bid_price_1
+                long_best_price = long_cross_price
+                short_best_price = short_cross_price
+
             # Push order update with status "not traded" (pending).
             if order.status == Status.SUBMITTING:
                 order.status = Status.NOTTRADED
                 self.strategy.on_order(order)
+
+            if order.direction == Direction.LONG:
+                order.price = long_best_price
+            elif order.direction == Direction.SHORT:
+                order.price = short_best_price
 
             # Check whether limit orders can be filled.
             long_cross = (
@@ -832,6 +881,8 @@ class BacktestingEngine:
             trade.datetime = self.datetime
 
             self.strategy.pos += pos_change
+            if self.strategy.get_name() == 'AllFutureStrategy':
+                self.strategy.add_symbol_pos(order.symbol, pos_change)
             self.strategy.on_trade(trade)
 
             self.trades[trade.vt_tradeid] = trade
@@ -840,18 +891,20 @@ class BacktestingEngine:
         """
         Cross stop order with last bar/tick data.
         """
-        if self.mode == BacktestingMode.BAR:
-            long_cross_price = self.bar.high_price
-            short_cross_price = self.bar.low_price
-            long_best_price = self.bar.open_price
-            short_best_price = self.bar.open_price
-        else:
-            long_cross_price = self.tick.last_price
-            short_cross_price = self.tick.last_price
-            long_best_price = long_cross_price
-            short_best_price = short_cross_price
 
         for stop_order in list(self.active_stop_orders.values()):
+            bar = self.get_current_bar(stop_order.symbol)
+            if self.mode == BacktestingMode.BAR:
+                long_cross_price = bar.high_price
+                short_cross_price = bar.low_price
+                long_best_price = bar.open_price
+                short_best_price = bar.open_price
+            else:
+                long_cross_price = self.tick.last_price
+                short_cross_price = self.tick.last_price
+                long_best_price = long_cross_price
+                short_best_price = short_cross_price
+
             # Check whether stop order can be triggered.
             long_cross = (
                 stop_order.direction == Direction.LONG
@@ -870,8 +923,8 @@ class BacktestingEngine:
             self.limit_order_count += 1
 
             order = OrderData(
-                symbol=self.symbol,
-                exchange=self.exchange,
+                symbol=bar.symbol,
+                exchange=bar.exchange,
                 orderid=str(self.limit_order_count),
                 direction=stop_order.direction,
                 offset=stop_order.offset,
@@ -995,8 +1048,8 @@ class BacktestingEngine:
         self.limit_order_count += 1
 
         order = OrderData(
-            symbol=self.symbol,
-            exchange=self.exchange,
+            symbol=self.order_bar.symbol,
+            exchange=self.order_bar.exchange,
             orderid=str(self.limit_order_count),
             direction=direction,
             offset=offset,
@@ -1005,7 +1058,7 @@ class BacktestingEngine:
             status=Status.SUBMITTING,
             gateway_name=self.gateway_name,
         )
-        order.datetime = self.datetime
+        order.datetime = self.order_bar.datetime
 
         self.active_limit_orders[order.vt_orderid] = order
         self.limit_orders[order.vt_orderid] = order
@@ -1107,10 +1160,92 @@ class BacktestingEngine:
         return list(self.daily_results.values())
 
 
+class DayDailyResult:
+    """"""
+
+    def __init__(self, date: date, price: dict):
+        """"""
+        self.close_price = price
+        self.date = date
+
+        self.trades = []
+        self.trade_count = 0
+
+        self.start_pos = {}
+        self.end_pos = {}
+
+        self.turnover = 0
+        self.commission = 0
+        self.slippage = 0
+
+        self.trading_pnl = 0
+        self.holding_pnl = 0
+        self.total_pnl = 0
+        self.net_pnl = 0
+
+    def add_trade(self, trade: TradeData):
+        """"""
+        self.trades.append(trade)
+
+    def calculate_pnl(
+        self,
+        pre_close: dict,
+        start_pos: dict,
+        size: int,
+        rate: float,
+        slippage: float,
+        inverse: bool
+    ):
+        """"""
+        if pre_close is None:
+            pre_close = {}
+        if start_pos is None:
+            start_pos = {}
+        # Trading pnl is the pnl from new trade during the day
+        self.trade_count = len(self.trades)
+        for trade in self.trades:
+            # If no pre_close provided on the first day,
+            # use value 1 to avoid zero division error
+            pre = pre_close.get(trade.symbol, 1)
+            close = self.close_price.get(trade.symbol, 1)
+
+            # Holding pnl is the pnl from holding position at day start
+            pos = start_pos.get(trade.symbol, 0)
+            if not inverse:  # For normal contract
+                self.holding_pnl += pos * (close - pre) * size
+            else:  # For crypto currency inverse contract
+                self.holding_pnl += pos * (1 / pre - 1 / close) * size
+
+            if trade.direction == Direction.LONG:
+                pos_change = trade.volume
+            else:
+                pos_change = -trade.volume
+
+            self.end_pos[trade.symbol] = self.end_pos.get(trade.symbol, 0) + pos_change
+
+            # For normal contract
+            if not inverse:
+                turnover = trade.volume * size * trade.price
+                self.trading_pnl += pos_change * (close - trade.price) * size
+                self.slippage += trade.volume * size * slippage
+            # For crypto currency inverse contract
+            else:
+                turnover = trade.volume * size / trade.price
+                self.trading_pnl += pos_change * (1 / trade.price - 1 / close) * size
+                self.slippage += trade.volume * size * slippage / (trade.price ** 2)
+
+            self.turnover += turnover
+            self.commission += turnover * rate
+
+        # Net pnl takes account of commission and slippage cost
+        self.total_pnl = self.trading_pnl + self.holding_pnl
+        self.net_pnl = self.total_pnl - self.commission - self.slippage
+
+
 class DailyResult:
     """"""
 
-    def __init__(self, date: date, close_price: float):
+    def __init__(self, date: date, close_price):
         """"""
         self.date = date
         self.close_price = close_price
@@ -1147,6 +1282,11 @@ class DailyResult:
         """"""
         # If no pre_close provided on the first day,
         # use value 1 to avoid zero division error
+        if pre_close is None:
+            pre_close = 0
+        if start_pos is None:
+            start_pos = 0
+
         if pre_close:
             self.pre_close = pre_close
         else:
@@ -1275,11 +1415,12 @@ def load_bar_data(
     exchange: Exchange,
     interval: Interval,
     start: datetime,
-    end: datetime
+    end: datetime,
+    like_symbol=None
 ):
     """"""
     return database_manager.load_bar_data(
-        symbol, exchange, interval, start, end
+        symbol, exchange, interval, start, end, like_symbol
     )
 
 

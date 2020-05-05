@@ -1,0 +1,316 @@
+from vnpy.app.cta_strategy import (
+    CtaTemplate,
+    StopOrder,
+    TickData,
+    BarData,
+    TradeData,
+    OrderData,
+    BarGenerator,
+    ArrayManager,
+)
+from datetime import date, datetime, timedelta
+import numpy as np
+import re
+import talib
+
+Future_Rate = {
+    'MA': {'rate_point': 2, 'size': 10, },
+    'AP': {'rate_point': 5, 'size': 10, },
+    'CJ': {'rate_point': 3, 'size': 5, },
+    'OI': {'rate_point': 2, 'size': 10, },
+    'SR': {'rate_point': 3, 'size': 10, },
+    'TA': {'rate_point': 3, 'size': 5, },
+    'SM': {'rate_point': 3, 'size': 5, },
+    'SF': {'rate_point': 3, 'size': 5, },
+    'CY': {'rate_point': 4, 'size': 5, },
+    'CF': {'rate_point': 4.3, 'size': 5, },
+    'RM': {'rate_point': 1.5, 'size': 10, },
+    'ZC': {'rate_point': 4, 'size': 100, },
+    'UR': {'rate_point': 5, 'size': 20, },
+    'WH': {'rate_point': 5, 'size': 20, },
+    'SA': {'rate_point': 3.5, 'size': 20, },
+    'FG': {'rate_point': 3, 'size': 20, },
+    'JR': {'rate_point': 3, 'size': 20, },
+    'LR': {'rate_point': 3, 'size': 20, },
+    'PM': {'rate_point': 5, 'size': 50, },
+    'RI': {'rate_point': 2.5, 'size': 20, },
+    'RS': {'rate_point': 2, 'size': 10, },
+    'J': {'rate': 6E-05, 'size': 100, },
+    'JM': {'rate': 6E-05, 'size': 60, },
+    'A': {'rate_point': 2, 'size': 10, },
+    'JD': {'rate': 0.00015, 'size': 5, },
+    'P': {'rate_point': 2.5, 'size': 10, },
+    'Y': {'rate_point': 2.5, 'size': 10, },
+    'CS': {'rate_point': 1.5, 'size': 10, },
+    'L': {'rate_point': 2, 'size': 5, },
+    'PP': {'rate': 6E-05, 'size': 5, },
+    'M': {'rate_point': 1.5, 'size': 10, },
+    'BB': {'rate': 0.0001, 'size': 500, },
+    'V': {'rate_point': 2, 'size': 5, },
+    'EG': {'rate_point': 4, 'size': 10, },
+    'C': {'rate_point': 1.2, 'size': 10, },
+    'FB': {'rate': 0.0001, 'size': 500, },
+    'PG': {'rate_point': 6, 'size': 20, },
+    'B': {'rate_point': 1, 'size': 10, },
+    'EB': {'rate_point': 6, 'size': 5, },
+    'I': {'rate': 0.0001, 'size': 100, },
+    'RR': {'rate_point': 4, 'size': 10, },
+    'CU': {'rate': 5E-05, 'size': 5, },
+    'ZN': {'rate_point': 3, 'size': 5, },
+    'AL': {'rate_point': 3, 'size': 5, },
+    'SN': {'rate_point': 3, 'size': 1, },
+    'PB': {'rate': 4E-05, 'size': 25, },
+    'AU': {'rate_point': 10, 'size': 1000, },
+    'WR': {'rate': 4E-05, 'size': 10, },
+    'SP': {'rate': 5E-05, 'size': 10, },
+    'FU': {'rate': 5E-05, 'size': 10, },
+    'RB': {'rate': 0.0001, 'size': 10, },
+    'HC': {'rate': 0.0001, 'size': 10, },
+    'BU': {'rate': 0.0001, 'size': 10, },
+    'SS': {'rate': 0.0001, 'size': 5, },
+    'NI': {'rate_point': 6, 'size': 1, },
+    'AG': {'rate': 5E-05, 'size': 15, },
+    'RU': {'rate': 4.5E-05, 'size': 10, },
+}
+
+
+class AllFutureStrategy(CtaTemplate):
+    author = "用Python的交易员"
+
+    test_day = 30
+    macd_param1 = 6
+    macd_param2 = 13
+    macd_param3 = 5
+    mac_day = 15
+
+    parameters = ["test_day", "macd_param1", "macd_param2", "macd_param3","mac_day"]
+
+    def __init__(self, cta_engine, strategy_name, vt_symbol, setting):
+        """"""
+        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
+
+        self.bg = BarGenerator(self.on_bar)
+        self.am = {}
+        self.active_symbol = {}
+        self.cache_bar = {}
+        self.symbol_expire = {}     # 各个合约的结束日期
+        self.change_flag = set()
+        self.symbol_pos = {}
+
+    @staticmethod
+    def get_future_rate(self):
+        return Future_Rate
+
+    def get_new_bar_price(self, bar):
+        close_price = {}
+        for temp in bar.values():
+            close_price[temp.symbol] = temp.close_price
+        return close_price
+
+    def get_new_bar_datatime(self, bar):
+        for temp in bar.values():
+            return temp.datetime
+
+    def add_symbol_pos(self, symbol, pos_change):
+        flag = self.get_symbol_flag(symbol)
+        old = self.symbol_pos.get(flag, 0)
+        self.symbol_pos[flag] = old + pos_change
+
+    def get_symbol_pos(self, flag):
+        return self.symbol_pos.get(flag, 0)
+
+    def get_symbol_flag(self, symbol):
+        flag = re.sub('\\d', "", symbol)
+        return flag
+
+    def get_active_symbol(self, symbol):
+        flag = self.get_symbol_flag(symbol)
+        return self.active_symbol.get(flag, None)
+
+    def get_like_symbol(self, symbol):
+        """
+        load data with like symbol
+        """
+        return '%'
+
+    def init_history(self, history_data):
+        """
+        init history bar data
+        """
+        for data in history_data:
+            for bar in data.values():
+                self.symbol_expire[bar.symbol] = bar.datetime
+
+    def on_init(self):
+        """
+        Callback when strategy is inited.
+        """
+        self.write_log("策略初始化")
+        self.load_bar(self.test_day)
+
+    def is_expire(self, symbol):
+        main_symbol = self.get_active_symbol(symbol)
+        if main_symbol:
+            return self.symbol_expire[symbol] < self.symbol_expire[main_symbol]
+
+    def change_active_symbol(self, flag):
+        best_bar = None
+        for data in list(self.cache_bar.values()):
+            bar = data[-1]
+            if self.get_symbol_flag(bar.symbol) != flag:
+                continue
+            if self.symbol_expire[bar.symbol] - bar.datetime <= timedelta(days=15):
+                self.cache_bar.pop(bar.symbol)
+                continue
+            if not best_bar:
+                best_bar = bar
+            elif bar.volume > best_bar.volume:
+                best_bar = bar
+            elif bar.volume == best_bar.volume and self.symbol_expire[bar.symbol] < self.symbol_expire[best_bar.symbol]:
+                best_bar = bar
+        if not best_bar:
+            self.active_symbol[flag] = None
+            print('change_active_symbol not best symbol', flag)
+            return
+        self.active_symbol[flag] = best_bar.symbol
+        print('active symbol', best_bar.symbol)
+        data = self.cache_bar[best_bar.symbol]
+        self.am[flag] = ArrayManager()
+        am = self.am[flag]
+        for bar in data:
+            am.update_bar(bar)
+            am.update_extra((bar.low_price + bar.high_price + bar.close_price * 2) / 4)
+        for symbol in list(self.cache_bar.keys()):
+            if self.is_expire(symbol):
+                self.cache_bar.pop(symbol)
+
+    def on_start(self):
+        """
+        Callback when strategy is started.
+        """
+        self.write_log("策略启动")
+        self.put_event()
+        for data in list(self.cache_bar.values()):
+            bar = data[-1]
+            flag = self.get_symbol_flag(bar.symbol)
+            self.change_flag.add(flag)
+        for flag in self.change_flag:
+            self.change_active_symbol(flag)
+        self.change_flag.clear()
+
+    def on_stop(self):
+        """
+        Callback when strategy is stopped.
+        """
+        self.write_log("策略停止")
+
+        self.put_event()
+
+    def on_tick(self, tick: TickData):
+        """
+        Callback of new tick data update.
+        """
+        self.bg.update_tick(tick)
+
+    def on_bar(self, data):
+        """
+        Callback of new bar data update.
+        """
+        for flag in list(self.change_flag):
+            if self.get_symbol_pos(flag) == 0:
+                self.change_active_symbol(flag)
+                self.change_flag.remove(flag)
+        best_bardata = {}
+        for bar in data.values():
+            flag = self.get_symbol_flag(bar.symbol)
+            if not Future_Rate[flag]:
+                continue
+            if self.is_expire(bar.symbol):
+                continue
+            if bar.symbol not in self.cache_bar:
+                self.cache_bar[bar.symbol] = []
+            self.cache_bar[bar.symbol].append(bar)
+            best_bar = best_bardata.get(flag, None)
+            if not best_bar or bar.volume > best_bar.volume:
+                best_bardata[flag] = bar
+        if not self.inited:
+            return
+        for flag, best_bar in best_bardata.items():
+            # 交易合约是否切换
+            active_symbol = self.active_symbol.get(flag, None)
+            if not active_symbol:
+                if len(self.cache_bar[best_bar.symbol]) >= self.test_day:
+                    self.change_active_symbol(flag)
+                    active_symbol = self.active_symbol.get(flag, None)
+            if not active_symbol:
+                continue
+            expire = self.symbol_expire[active_symbol]
+            bar = self.cache_bar[active_symbol][-1]
+            am = self.am[flag]
+            am.update_bar(bar)
+            am.update_extra((bar.low_price + bar.high_price + bar.close_price * 2) / 4)
+            self.cta_engine.set_order_bar(bar)
+            change = False
+            pos = self.get_symbol_pos(flag)
+            if bar.datetime + timedelta(days=7) >= expire:
+                # 小于7天平仓做主力合约
+                print(bar.symbol, expire - bar.datetime)
+                change = True
+            elif bar.datetime + timedelta(days=15) >= expire:
+                # 小于15天未开仓做主力合约
+                if pos == 0:
+                    change = True
+                print(bar.symbol, expire - bar.datetime)
+            elif best_bar.volume > 0:
+                if flag not in self.change_flag and bar.volume / best_bar.volume < 0.35:
+                    # 小于主力合约35% 下一次平仓做主力合约
+                    if pos == 0:
+                        change = True
+                    else:
+                        self.change_flag.add(flag)
+                elif bar.volume / best_bar.volume < 0.1:
+                    # 小于主力合约10%平仓做主力合约
+                    change = True
+            if change:
+                if pos > 0:
+                    self.sell(bar.close_price, 1)
+                elif pos < 0:
+                    self.cover(bar.close_price, 1)
+                self.change_flag.add(flag)
+            elif len(self.cache_bar[active_symbol]) >= self.test_day:
+                mac = talib.MA(am.extra, self.mac_day)[-1]
+                qg = max(am.open[-2], am.close[-2])
+                qd = min(am.open[-2], am.close[-2]) #这个地方我改成了min
+
+                macd, signal, hist = am.macd(self.macd_param1, self.macd_param2, self.macd_param3, True)
+                if pos > 0:
+                    if bar.close_price < mac and bar.close_price < qd:
+                        self.sell(bar.close_price, 1)
+                if pos < 0:
+                    if bar.close_price > mac and bar.close_price > qg:
+                        self.cover(bar.close_price, 1)
+                if pos == 0:
+                    if bar.close_price > mac and bar.close_price > qg and macd[-1] > signal[-1] and bar.close_price > bar.open_price :
+                        self.buy(bar.close_price, 1)
+                    if bar.close_price < mac and bar.close_price < qd and macd[-1] < signal[-1] and bar.close_price < bar.open_price :
+                        self.short(bar.close_price, 1)
+
+            self.put_event()
+
+    def on_order(self, order: OrderData):
+        """
+        Callback of new order data update.
+        """
+        pass
+
+    def on_trade(self, trade: TradeData):
+        """
+        Callback of new trade data update.
+        """
+        self.put_event()
+
+    def on_stop_order(self, stop_order: StopOrder):
+        """
+        Callback of stop order update.
+        """
+        pass

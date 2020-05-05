@@ -24,7 +24,8 @@ class BaseDatabaseManager(ABC):
         exchange: "Exchange",
         interval: "Interval",
         start: datetime,
-        end: datetime
+        end: datetime,
+        like_symbol=None
     ) -> Sequence["BarData"]:
         pass
 

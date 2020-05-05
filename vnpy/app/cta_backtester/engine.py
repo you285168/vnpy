@@ -57,7 +57,7 @@ class BacktesterEngine(BaseEngine):
         self.load_strategy_class()
         self.write_log("策略文件加载完成")
 
-        self.init_rqdata()
+#        self.init_rqdata()
 
     def init_rqdata(self):
         """

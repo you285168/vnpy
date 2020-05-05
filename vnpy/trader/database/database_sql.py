@@ -337,18 +337,31 @@ class SqlManager(BaseDatabaseManager):
         interval: Interval,
         start: datetime,
         end: datetime,
+        like_symbol=None
     ) -> Sequence[BarData]:
-        s = (
-            self.class_bar.select()
-                .where(
-                (self.class_bar.symbol == symbol)
-                & (self.class_bar.exchange == exchange.value)
-                & (self.class_bar.interval == interval.value)
-                & (self.class_bar.datetime >= start)
-                & (self.class_bar.datetime <= end)
+        if like_symbol:
+            s = (
+                    self.class_bar.select()
+                        .where(
+                        (self.class_bar.symbol % like_symbol)
+                        & (self.class_bar.interval == interval.value)
+                        & (self.class_bar.datetime >= start)
+                        & (self.class_bar.datetime <= end)
+                    )
+                    .order_by(self.class_bar.datetime)
             )
-            .order_by(self.class_bar.datetime)
-        )
+        else:
+            s = (
+                self.class_bar.select()
+                    .where(
+                    (self.class_bar.symbol == symbol)
+                    & (self.class_bar.exchange == exchange.value)
+                    & (self.class_bar.interval == interval.value)
+                    & (self.class_bar.datetime >= start)
+                    & (self.class_bar.datetime <= end)
+                )
+                .order_by(self.class_bar.datetime)
+            )
         data = [db_bar.to_bar() for db_bar in s]
         return data
 

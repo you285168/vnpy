@@ -16,8 +16,11 @@ class FutureStrategy(CtaTemplate):
     author = "用Python的交易员"
 
     test_day = 30
+    macd_param1 = 12
+    macd_param2 = 6
+    macd_param3 = 9
 
-    parameters = ["test_day"]
+    parameters = ["test_day", "macd_param1", "macd_param2", "macd_param3"]
 
     def __init__(self, cta_engine, strategy_name, vt_symbol, setting):
         """"""
@@ -25,14 +28,13 @@ class FutureStrategy(CtaTemplate):
 
         self.bg = BarGenerator(self.on_bar)
         self.am = ArrayManager()
-        self.param_array: np.ndarray = np.zeros(100)
 
     def on_init(self):
         """
         Callback when strategy is inited.
         """
         self.write_log("策略初始化")
-        self.load_bar(30)
+        self.load_bar(self.test_day)
 
     def on_start(self):
         """
@@ -62,16 +64,16 @@ class FutureStrategy(CtaTemplate):
 
         am = self.am
         am.update_bar(bar)
-        self.param_array[:-1] = self.param_array[1:]
-        self.param_array[-1] = (bar.low_price + bar.high_price + bar.close_price * 2) / 4
+        am.update_extra((bar.low_price + bar.high_price + bar.close_price * 2) / 4)
         if not self.inited:
             return
 
-        mac = talib.MA(self.param_array, 20)[-1]
+        mac = talib.MA(am.extra, 20)[-1]
         qg = max(am.open[-2], am.close[-2])
-        qd = max(am.open[-2], am.close[-2])
-        diff = am.ema(12, True) - am.ema(26, True)
-        dea = talib.EMA(diff, 9)
+        qd = min(am.open[-2], am.close[-2]) #这个地方我改成了min
+
+        macd, signal, hist = am.macd(self.macd_param1, self.macd_param2, self.macd_param3, True)
+
         if self.pos > 0:
             if bar.close_price < mac and bar.close_price < qd:
                 self.sell(bar.close_price, 1)
@@ -79,9 +81,9 @@ class FutureStrategy(CtaTemplate):
             if bar.close_price > mac and bar.close_price > qg:
                 self.cover(bar.close_price, 1)
         if self.pos == 0:
-            if bar.close_price > mac and bar.close_price > qg and diff[-1] > dea[-1] and bar.close_price > bar.open_price:
+            if bar.close_price > mac and bar.close_price > qg and macd[-1] > signal[-1] and bar.close_price > bar.open_price :
                 self.buy(bar.close_price, 1)
-            if bar.close_price < mac and bar.close_price < qg and diff[-1] < dea[-1] and bar.close_price < bar.open_price:
+            if bar.close_price < mac and bar.close_price < qg and macd[-1] < signal[-1] and bar.close_price < bar.open_price :
                 self.short(bar.close_price, 1)
 
         self.put_event()
