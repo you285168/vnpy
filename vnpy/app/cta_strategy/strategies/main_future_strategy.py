@@ -11,6 +11,7 @@ from vnpy.app.cta_strategy import (
 from datetime import date, datetime, timedelta
 import numpy as np
 import talib
+from vnpy.app.cta_strategy.future_params import Future_Params, get_symbol_flag
 
 
 class MainFutureStrategy(CtaTemplate):
@@ -94,6 +95,9 @@ class MainFutureStrategy(CtaTemplate):
             self.active_symbol = None
             return
         self.active_symbol = best_bar.symbol
+        flag = get_symbol_flag(best_bar.symbol)
+        param = Future_Params[flag]
+        param['pos'] = int(100000 / (best_bar.close_price * self.cta_engine.get_size() * 0.3))
         print('active symbol', best_bar.symbol)
         data = self.cache_bar[self.active_symbol]
         self.am = ArrayManager()
@@ -153,6 +157,8 @@ class MainFutureStrategy(CtaTemplate):
         am.update_extra((bar.low_price + bar.high_price + bar.close_price * 2) / 4)
         self.cta_engine.set_order_bar(bar)
         change = False
+        flag = get_symbol_flag(self.active_symbol)
+        one_pos = Future_Params[flag]['pos']
         if expire - bar.datetime <= timedelta(days=7):
             # 小于7天平仓做主力合约
             change = True
@@ -172,9 +178,9 @@ class MainFutureStrategy(CtaTemplate):
                 change = True
         if change:
             if self.pos > 0:
-                self.sell(bar.close_price, 1)
+                self.sell(bar.close_price, one_pos)
             elif self.pos < 0:
-                self.cover(bar.close_price, 1)
+                self.cover(bar.close_price, one_pos)
             self.change_flag = True
             # self.change_active_symbol()
 
@@ -186,15 +192,15 @@ class MainFutureStrategy(CtaTemplate):
             macd, signal, hist = am.macd(self.macd_param1, self.macd_param2, self.macd_param3, True)
             if self.pos > 0:
                 if bar.close_price < mac and bar.close_price < qd:
-                    self.sell(bar.close_price, 1)
+                    self.sell(bar.close_price, one_pos)
             if self.pos < 0:
                 if bar.close_price > mac and bar.close_price > qg:
-                    self.cover(bar.close_price, 1)
+                    self.cover(bar.close_price, one_pos)
             if self.pos == 0:
                 if bar.close_price > mac and bar.close_price > qg and macd[-1] > signal[-1] and bar.close_price > bar.open_price :
-                    self.buy(bar.close_price, 1)
+                    self.buy(bar.close_price, one_pos)
                 if bar.close_price < mac and bar.close_price < qd and macd[-1] < signal[-1] and bar.close_price < bar.open_price :
-                    self.short(bar.close_price, 1)
+                    self.short(bar.close_price, one_pos)
 
         self.put_event()
 

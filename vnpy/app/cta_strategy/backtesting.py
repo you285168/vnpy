@@ -19,6 +19,7 @@ from vnpy.trader.constant import (Direction, Offset, Exchange,
 from vnpy.trader.database import database_manager
 from vnpy.trader.object import OrderData, TradeData, BarData, TickData
 from vnpy.trader.utility import round_to
+from vnpy.app.cta_strategy.future_params import Future_Params, get_symbol_flag
 
 from .base import (
     BacktestingMode,
@@ -148,6 +149,9 @@ class BacktestingEngine:
 
         self.daily_results = {}
         self.daily_df = None
+
+    def get_size(self):
+        return self.size
 
     def clear_data(self):
         """
@@ -353,15 +357,12 @@ class BacktestingEngine:
         pre_close = None
         start_pos = None
 
-        rate = self.rate
-        if self.strategy.get_name() == 'AllFutureStrategy':
-            rate = self.strategy.get_future_rate()
         for daily_result in self.daily_results.values():
             daily_result.calculate_pnl(
                 pre_close,
                 start_pos,
                 self.size,
-                rate,
+                self.rate,
                 self.slippage,
                 self.inverse
             )
@@ -1223,19 +1224,25 @@ class DayDailyResult:
 
             self.end_pos[trade.symbol] = self.end_pos.get(trade.symbol, 0) + pos_change
 
+            flag = get_symbol_flag(trade.symbol)
+            param = Future_Params[flag]
             # For normal contract
             if not inverse:
                 turnover = trade.volume * size * trade.price
                 self.trading_pnl += pos_change * (close - trade.price) * size
-                self.slippage += trade.volume * size * slippage
+                self.slippage += trade.volume * size * param['slip'] * param['slip_loss']
             # For crypto currency inverse contract
             else:
                 turnover = trade.volume * size / trade.price
                 self.trading_pnl += pos_change * (1 / trade.price - 1 / close) * size
-                self.slippage += trade.volume * size * slippage / (trade.price ** 2)
+                self.slippage += trade.volume * size * param['slip'] * param['slip_loss'] / (trade.price ** 2)
 
             self.turnover += turnover
-            self.commission += turnover * rate
+            if 'rate' in param:
+                self.commission += turnover * param['rate'] * 1.05
+            elif 'rate_point' in param:
+                self.commission += pos_change * param['rate_point'] * 1.05
+
 
         # Net pnl takes account of commission and slippage cost
         self.total_pnl = self.trading_pnl + self.holding_pnl
@@ -1314,21 +1321,35 @@ class DailyResult:
 
             self.end_pos += pos_change
 
+            flag = get_symbol_flag(trade.symbol)
+            param = Future_Params.get(flag, None)
             # For normal contract
             if not inverse:
                 turnover = trade.volume * size * trade.price
                 self.trading_pnl += pos_change * \
                     (self.close_price - trade.price) * size
-                self.slippage += trade.volume * size * slippage
+                if param:
+                    self.slippage += trade.volume * size * param['slip'] * param['slip_loss']
+                else:
+                    self.slippage += trade.volume * size * slippage
             # For crypto currency inverse contract
             else:
                 turnover = trade.volume * size / trade.price
                 self.trading_pnl += pos_change * \
                     (1 / trade.price - 1 / self.close_price) * size
-                self.slippage += trade.volume * size * slippage / (trade.price ** 2)
+                if param:
+                    self.slippage += trade.volume * size * param['slip'] * param['slip_loss']
+                else:
+                    self.slippage += trade.volume * size * slippage / (trade.price ** 2)
 
             self.turnover += turnover
-            self.commission += turnover * rate
+            if param:
+                if 'rate' in param:
+                    self.commission += turnover * param['rate'] * 1.05
+                elif 'rate_point' in param:
+                    self.commission += pos_change * param['rate_point'] * 1.05
+            else:
+                self.commission += turnover * rate
 
         # Net pnl takes account of commission and slippage cost
         self.total_pnl = self.trading_pnl + self.holding_pnl

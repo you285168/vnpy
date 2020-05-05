@@ -12,66 +12,7 @@ from datetime import date, datetime, timedelta
 import numpy as np
 import re
 import talib
-
-Future_Rate = {
-    'MA': {'rate_point': 2, 'size': 10, },
-    'AP': {'rate_point': 5, 'size': 10, },
-    'CJ': {'rate_point': 3, 'size': 5, },
-    'OI': {'rate_point': 2, 'size': 10, },
-    'SR': {'rate_point': 3, 'size': 10, },
-    'TA': {'rate_point': 3, 'size': 5, },
-    'SM': {'rate_point': 3, 'size': 5, },
-    'SF': {'rate_point': 3, 'size': 5, },
-    'CY': {'rate_point': 4, 'size': 5, },
-    'CF': {'rate_point': 4.3, 'size': 5, },
-    'RM': {'rate_point': 1.5, 'size': 10, },
-    'ZC': {'rate_point': 4, 'size': 100, },
-    'UR': {'rate_point': 5, 'size': 20, },
-    'WH': {'rate_point': 5, 'size': 20, },
-    'SA': {'rate_point': 3.5, 'size': 20, },
-    'FG': {'rate_point': 3, 'size': 20, },
-    'JR': {'rate_point': 3, 'size': 20, },
-    'LR': {'rate_point': 3, 'size': 20, },
-    'PM': {'rate_point': 5, 'size': 50, },
-    'RI': {'rate_point': 2.5, 'size': 20, },
-    'RS': {'rate_point': 2, 'size': 10, },
-    'J': {'rate': 6E-05, 'size': 100, },
-    'JM': {'rate': 6E-05, 'size': 60, },
-    'A': {'rate_point': 2, 'size': 10, },
-    'JD': {'rate': 0.00015, 'size': 5, },
-    'P': {'rate_point': 2.5, 'size': 10, },
-    'Y': {'rate_point': 2.5, 'size': 10, },
-    'CS': {'rate_point': 1.5, 'size': 10, },
-    'L': {'rate_point': 2, 'size': 5, },
-    'PP': {'rate': 6E-05, 'size': 5, },
-    'M': {'rate_point': 1.5, 'size': 10, },
-    'BB': {'rate': 0.0001, 'size': 500, },
-    'V': {'rate_point': 2, 'size': 5, },
-    'EG': {'rate_point': 4, 'size': 10, },
-    'C': {'rate_point': 1.2, 'size': 10, },
-    'FB': {'rate': 0.0001, 'size': 500, },
-    'PG': {'rate_point': 6, 'size': 20, },
-    'B': {'rate_point': 1, 'size': 10, },
-    'EB': {'rate_point': 6, 'size': 5, },
-    'I': {'rate': 0.0001, 'size': 100, },
-    'RR': {'rate_point': 4, 'size': 10, },
-    'CU': {'rate': 5E-05, 'size': 5, },
-    'ZN': {'rate_point': 3, 'size': 5, },
-    'AL': {'rate_point': 3, 'size': 5, },
-    'SN': {'rate_point': 3, 'size': 1, },
-    'PB': {'rate': 4E-05, 'size': 25, },
-    'AU': {'rate_point': 10, 'size': 1000, },
-    'WR': {'rate': 4E-05, 'size': 10, },
-    'SP': {'rate': 5E-05, 'size': 10, },
-    'FU': {'rate': 5E-05, 'size': 10, },
-    'RB': {'rate': 0.0001, 'size': 10, },
-    'HC': {'rate': 0.0001, 'size': 10, },
-    'BU': {'rate': 0.0001, 'size': 10, },
-    'SS': {'rate': 0.0001, 'size': 5, },
-    'NI': {'rate_point': 6, 'size': 1, },
-    'AG': {'rate': 5E-05, 'size': 15, },
-    'RU': {'rate': 4.5E-05, 'size': 10, },
-}
+from vnpy.app.cta_strategy.future_params import Future_Params, get_symbol_flag
 
 
 class AllFutureStrategy(CtaTemplate):
@@ -97,10 +38,6 @@ class AllFutureStrategy(CtaTemplate):
         self.change_flag = set()
         self.symbol_pos = {}
 
-    @staticmethod
-    def get_future_rate(self):
-        return Future_Rate
-
     def get_new_bar_price(self, bar):
         close_price = {}
         for temp in bar.values():
@@ -112,19 +49,15 @@ class AllFutureStrategy(CtaTemplate):
             return temp.datetime
 
     def add_symbol_pos(self, symbol, pos_change):
-        flag = self.get_symbol_flag(symbol)
+        flag = get_symbol_flag(symbol)
         old = self.symbol_pos.get(flag, 0)
         self.symbol_pos[flag] = old + pos_change
 
     def get_symbol_pos(self, flag):
         return self.symbol_pos.get(flag, 0)
 
-    def get_symbol_flag(self, symbol):
-        flag = re.sub('\\d', "", symbol)
-        return flag
-
     def get_active_symbol(self, symbol):
-        flag = self.get_symbol_flag(symbol)
+        flag = get_symbol_flag(symbol)
         return self.active_symbol.get(flag, None)
 
     def get_like_symbol(self, symbol):
@@ -157,7 +90,7 @@ class AllFutureStrategy(CtaTemplate):
         best_bar = None
         for data in list(self.cache_bar.values()):
             bar = data[-1]
-            if self.get_symbol_flag(bar.symbol) != flag:
+            if get_symbol_flag(bar.symbol) != flag:
                 continue
             if self.symbol_expire[bar.symbol] - bar.datetime <= timedelta(days=15):
                 self.cache_bar.pop(bar.symbol)
@@ -173,6 +106,8 @@ class AllFutureStrategy(CtaTemplate):
             print('change_active_symbol not best symbol', flag)
             return
         self.active_symbol[flag] = best_bar.symbol
+        param = Future_Params[flag]
+        param['pos'] = int(100000/ (best_bar.close_price * self.cta_engine.get_size() * 0.3))
         print('active symbol', best_bar.symbol)
         data = self.cache_bar[best_bar.symbol]
         self.am[flag] = ArrayManager()
@@ -192,7 +127,7 @@ class AllFutureStrategy(CtaTemplate):
         self.put_event()
         for data in list(self.cache_bar.values()):
             bar = data[-1]
-            flag = self.get_symbol_flag(bar.symbol)
+            flag = get_symbol_flag(bar.symbol)
             self.change_flag.add(flag)
         for flag in self.change_flag:
             self.change_active_symbol(flag)
@@ -222,8 +157,8 @@ class AllFutureStrategy(CtaTemplate):
                 self.change_flag.remove(flag)
         best_bardata = {}
         for bar in data.values():
-            flag = self.get_symbol_flag(bar.symbol)
-            if not Future_Rate[flag]:
+            flag = get_symbol_flag(bar.symbol)
+            if flag not in Future_Params:
                 continue
             if self.is_expire(bar.symbol):
                 continue
@@ -252,6 +187,7 @@ class AllFutureStrategy(CtaTemplate):
             self.cta_engine.set_order_bar(bar)
             change = False
             pos = self.get_symbol_pos(flag)
+            one_pos = Future_Params[flag]['pos']
             if bar.datetime + timedelta(days=7) >= expire:
                 # 小于7天平仓做主力合约
                 print(bar.symbol, expire - bar.datetime)
@@ -273,9 +209,9 @@ class AllFutureStrategy(CtaTemplate):
                     change = True
             if change:
                 if pos > 0:
-                    self.sell(bar.close_price, 1)
+                    self.sell(bar.close_price, one_pos)
                 elif pos < 0:
-                    self.cover(bar.close_price, 1)
+                    self.cover(bar.close_price, one_pos)
                 self.change_flag.add(flag)
             elif len(self.cache_bar[active_symbol]) >= self.test_day:
                 mac = talib.MA(am.extra, self.mac_day)[-1]
@@ -285,15 +221,15 @@ class AllFutureStrategy(CtaTemplate):
                 macd, signal, hist = am.macd(self.macd_param1, self.macd_param2, self.macd_param3, True)
                 if pos > 0:
                     if bar.close_price < mac and bar.close_price < qd:
-                        self.sell(bar.close_price, 1)
+                        self.sell(bar.close_price, one_pos)
                 if pos < 0:
                     if bar.close_price > mac and bar.close_price > qg:
-                        self.cover(bar.close_price, 1)
+                        self.cover(bar.close_price, one_pos)
                 if pos == 0:
                     if bar.close_price > mac and bar.close_price > qg and macd[-1] > signal[-1] and bar.close_price > bar.open_price :
-                        self.buy(bar.close_price, 1)
+                        self.buy(bar.close_price, one_pos)
                     if bar.close_price < mac and bar.close_price < qd and macd[-1] < signal[-1] and bar.close_price < bar.open_price :
-                        self.short(bar.close_price, 1)
+                        self.short(bar.close_price, one_pos)
 
             self.put_event()
 
