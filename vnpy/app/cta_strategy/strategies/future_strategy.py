@@ -17,7 +17,7 @@ class FutureStrategy(CtaTemplate):
 
     test_day = 30
     macd_param1 = 12
-    macd_param2 = 6
+    macd_param2 = 26
     macd_param3 = 9
 
     parameters = ["test_day", "macd_param1", "macd_param2", "macd_param3"]
@@ -27,7 +27,7 @@ class FutureStrategy(CtaTemplate):
         super().__init__(cta_engine, strategy_name, vt_symbol, setting)
 
         self.bg = BarGenerator(self.on_bar)
-        self.am = ArrayManager()
+        self.am = ArrayManager(size = 35)
 
     def on_init(self):
         """
@@ -61,6 +61,7 @@ class FutureStrategy(CtaTemplate):
         """
         Callback of new bar data update.
         """
+        self.cta_engine.set_order_bar(bar)
 
         am = self.am
         am.update_bar(bar)
@@ -74,6 +75,13 @@ class FutureStrategy(CtaTemplate):
 
         macd, signal, hist = am.macd(self.macd_param1, self.macd_param2, self.macd_param3, True)
 
+        ema12 = am.ema(12,True)
+        ema26 = am.ema(26,True)
+        dif = ema12-ema26
+        dea = talib.EMA(dif,9)
+        hst = 2*(dea-dif)
+
+        print(bar.datetime, macd[-1], signal[-1], hist[-1])
         if self.pos > 0:
             if bar.close_price < mac and bar.close_price < qd:
                 self.sell(bar.close_price, 1)

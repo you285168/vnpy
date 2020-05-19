@@ -18,10 +18,10 @@ class MainFutureStrategy(CtaTemplate):
     author = "用Python的交易员"
 
     test_day = 30
-    macd_param1 = 6
-    macd_param2 = 13
-    macd_param3 = 5
-    mac_day = 15
+    macd_param1 = 12
+    macd_param2 = 26
+    macd_param3 = 9
+    mac_day = 20
 
     parameters = ["test_day", "macd_param1", "macd_param2", "macd_param3","mac_day"]
 
@@ -30,7 +30,7 @@ class MainFutureStrategy(CtaTemplate):
         super().__init__(cta_engine, strategy_name, vt_symbol, setting)
 
         self.bg = BarGenerator(self.on_bar)
-        self.am = ArrayManager()
+        self.am = ArrayManager(size = 35)
         self.active_symbol = None
         self.cache_bar = {}
         self.symbol_expire = {}     # 各个合约的结束日期
@@ -167,13 +167,13 @@ class MainFutureStrategy(CtaTemplate):
             if self.pos == 0:
                 change = True
         elif best_bar.volume > 0:
-            if not self.change_flag and bar.volume / best_bar.volume < 0.35:
+            if not self.change_flag and bar.volume / best_bar.volume < 0.01:
                 # 小于主力合约35% 下一次平仓做主力合约
                 if self.pos == 0:
                     change = True
                 else:
                     self.change_flag = True
-            elif bar.volume / best_bar.volume < 0.1:
+            elif bar.volume / best_bar.volume < 0.001:
                 # 小于主力合约10%平仓做主力合约
                 change = True
         if change:

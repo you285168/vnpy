@@ -440,6 +440,8 @@ class BacktestingEngine:
             end_balance = df["balance"].iloc[-1]
             max_drawdown = df["drawdown"].min()
             max_ddpercent = df["ddpercent"].min()
+            if max_ddpercent == 0:
+                max_ddpercent = 1
             max_drawdown_end = df["drawdown"].idxmin()
 
             if isinstance(max_drawdown_end, date):
@@ -1205,6 +1207,9 @@ class DayDailyResult:
         # Trading pnl is the pnl from new trade during the day
         self.trade_count = len(self.trades)
         for trade in self.trades:
+            flag = get_symbol_flag(trade.symbol)
+            param = Future_Params[flag]
+
             # If no pre_close provided on the first day,
             # use value 1 to avoid zero division error
             pre = pre_close.get(trade.symbol, 1)
@@ -1212,6 +1217,7 @@ class DayDailyResult:
 
             # Holding pnl is the pnl from holding position at day start
             pos = start_pos.get(trade.symbol, 0)
+            size = param.get('size', size)
             if not inverse:  # For normal contract
                 self.holding_pnl += pos * (close - pre) * size
             else:  # For crypto currency inverse contract
@@ -1224,8 +1230,7 @@ class DayDailyResult:
 
             self.end_pos[trade.symbol] = self.end_pos.get(trade.symbol, 0) + pos_change
 
-            flag = get_symbol_flag(trade.symbol)
-            param = Future_Params[flag]
+
             # For normal contract
             if not inverse:
                 turnover = trade.volume * size * trade.price

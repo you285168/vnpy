@@ -19,10 +19,10 @@ class AllFutureStrategy(CtaTemplate):
     author = "用Python的交易员"
 
     test_day = 30
-    macd_param1 = 6
-    macd_param2 = 13
-    macd_param3 = 5
-    mac_day = 15
+    macd_param1 = 12
+    macd_param2 = 26
+    macd_param3 = 9
+    mac_day = 20
 
     parameters = ["test_day", "macd_param1", "macd_param2", "macd_param3","mac_day"]
 
@@ -198,13 +198,13 @@ class AllFutureStrategy(CtaTemplate):
                     change = True
                 print(bar.symbol, expire - bar.datetime)
             elif best_bar.volume > 0:
-                if flag not in self.change_flag and bar.volume / best_bar.volume < 0.35:
+                if flag not in self.change_flag and bar.volume / best_bar.volume < 0.01:
                     # 小于主力合约35% 下一次平仓做主力合约
                     if pos == 0:
                         change = True
                     else:
                         self.change_flag.add(flag)
-                elif bar.volume / best_bar.volume < 0.1:
+                elif bar.volume / best_bar.volume < 0.001:
                     # 小于主力合约10%平仓做主力合约
                     change = True
             if change:

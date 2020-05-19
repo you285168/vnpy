@@ -34,6 +34,7 @@ class RqdataClient:
         self.username: str = SETTINGS["rqdata.username"]
         self.password: str = SETTINGS["rqdata.password"]
 
+        print(self.username, self.password)
         self.inited: bool = False
         self.symbols: set = set()
 
@@ -61,7 +62,12 @@ class RqdataClient:
             df = rqdata_all_instruments()
             for ix, row in df.iterrows():
                 self.symbols.add(row['order_book_id'])
+
+
+            temp = rqdata_get_price('000001.XSHE', start_date='2015-04-01', end_date='2015-04-01', frequency='15m')
+            print('get_price', temp)
         except (RuntimeError, AuthenticationFailed):
+            print('rqdata error')
             return False
 
         self.inited = True

@@ -81,7 +81,7 @@ Future_List = [
 
 # 下载股票数据
 def future_to_bar():
-    engine = create_engine('mysql+pymysql://root:123456@127.0.0.1/vnpy?charset=utf8')
+    engine = create_engine('mysql+pymysql://root:123@192.168.1.12/vnpy?charset=utf8')
 
     # 3. 创建表模型
     Base = declarative_base()
@@ -125,5 +125,5 @@ def future_to_bar():
 
 
 if __name__ == "__main__":
-    # future_to_bar()
+    future_to_bar()
     pass
