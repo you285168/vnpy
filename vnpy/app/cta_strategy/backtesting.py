@@ -357,11 +357,17 @@ class BacktestingEngine:
         pre_close = None
         start_pos = None
 
+        size = self.size
+        flag = get_symbol_flag(self.symbol)
+        if flag in Future_Params:
+            param = Future_Params[flag]
+            size = param.get('size', size)
+
         for daily_result in self.daily_results.values():
             daily_result.calculate_pnl(
                 pre_close,
                 start_pos,
-                self.size,
+                size,
                 self.rate,
                 self.slippage,
                 self.inverse
