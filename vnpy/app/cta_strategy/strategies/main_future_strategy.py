@@ -97,7 +97,7 @@ class MainFutureStrategy(CtaTemplate):
         self.active_symbol = best_bar.symbol
         flag = get_symbol_flag(best_bar.symbol)
         param = Future_Params[flag]
-        param['pos'] = int(100000 / (best_bar.close_price * self.cta_engine.get_size() * 0.3))
+        param['pos'] = int(150000 / (best_bar.close_price * param['size'] * 0.3))
         print('active symbol', best_bar.symbol)
         data = self.cache_bar[self.active_symbol]
         self.am = ArrayManager()
