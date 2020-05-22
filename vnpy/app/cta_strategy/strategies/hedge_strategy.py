@@ -271,7 +271,6 @@ class HedgeStrategy(CtaTemplate):
             bar = self.cache_bar[symbol][-1]
             flag = get_symbol_flag(bar.symbol)
             param = Future_Params[flag]
-            pos = int(150000 / (bar.close_price * param['size'] * 0.3))
             if pos > 0:
                 loss_price += (bar.close_price - price) * abs(pos) * param['size']
             elif pos < 0 and bar.close_price > price:
