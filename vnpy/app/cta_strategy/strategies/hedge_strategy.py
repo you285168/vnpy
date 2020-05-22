@@ -189,7 +189,7 @@ class HedgeStrategy(CtaTemplate):
             if bar.symbol not in self.cache_bar:
                 self.cache_bar[bar.symbol] = []
             self.cache_bar[bar.symbol].append(bar)
-            if not self.is_expire(bar):
+            if not self.is_expire(bar):     # 剩余天数 小于等于7天 排除
                 best_bar = best_bardata.get(flag, None)
                 if not best_bar or bar.volume > best_bar.volume:
                     best_bardata[flag] = bar
@@ -197,10 +197,11 @@ class HedgeStrategy(CtaTemplate):
         if not self.inited:
             return
         if len(self.active_symbol) <= 0:
+            # 选取对冲合约
             self.select_symbol(best_bardata)
             return
         if self.day >= self.Z:
-            # 持续持有Z（参数）日后全部平仓 第二天重新开始计算是否开仓
+            # 持续持有Z（参数）日后全部平仓 第二天重新开始选取对冲合约
             self.clear_all_symbol()
             return
 
