@@ -771,7 +771,7 @@ class BacktestingEngine:
     def update_daily_close(self, price):
         """"""
         d = self.datetime.date()
-        if self.strategy.get_name() == 'AllFutureStrategy':
+        if self.strategy.get_name() == 'AllFutureStrategy' or self.strategy.get_name() == 'HedgeStrategy':
             daily_result = self.daily_results.get(d, None)
             if not daily_result:
                 self.daily_results[d] = DayDailyResult(d, price)
