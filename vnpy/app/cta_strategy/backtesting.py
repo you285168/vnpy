@@ -1226,6 +1226,7 @@ class DayDailyResult:
                 self.holding_pnl += pos * (close - pre) * size
             else:  # For crypto currency inverse contract
                 self.holding_pnl += pos * (1 / pre - 1 / close) * size
+            self.end_pos[symbol] = pos
 
         for trade in self.trades:
             flag = get_symbol_flag(trade.symbol)
