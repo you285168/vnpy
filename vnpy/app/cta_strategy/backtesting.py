@@ -1212,30 +1212,32 @@ class DayDailyResult:
             start_pos = {}
         # Trading pnl is the pnl from new trade during the day
         self.trade_count = len(self.trades)
-        for trade in self.trades:
-            flag = get_symbol_flag(trade.symbol)
-            param = Future_Params[flag]
 
+        # Holding pnl is the pnl from holding position at day start
+        for symbol, pos in start_pos.items():
+            flag = get_symbol_flag(symbol)
+            param = Future_Params[flag]
             # If no pre_close provided on the first day,
             # use value 1 to avoid zero division error
-            pre = pre_close.get(trade.symbol, 1)
-            close = self.close_price.get(trade.symbol, 1)
-
-            # Holding pnl is the pnl from holding position at day start
-            pos = start_pos.get(trade.symbol, 0)
+            pre = pre_close.get(symbol, 1)
+            close = self.close_price.get(symbol, 1)
             size = param.get('size', size)
             if not inverse:  # For normal contract
                 self.holding_pnl += pos * (close - pre) * size
             else:  # For crypto currency inverse contract
                 self.holding_pnl += pos * (1 / pre - 1 / close) * size
 
+        for trade in self.trades:
+            flag = get_symbol_flag(trade.symbol)
+            param = Future_Params[flag]
+            close = self.close_price.get(trade.symbol, 1)
+            size = param.get('size', size)
             if trade.direction == Direction.LONG:
                 pos_change = trade.volume
             else:
                 pos_change = -trade.volume
 
             self.end_pos[trade.symbol] = self.end_pos.get(trade.symbol, 0) + pos_change
-
 
             # For normal contract
             if not inverse:
