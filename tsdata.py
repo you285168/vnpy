@@ -24,7 +24,7 @@ def save_stock_daily_basic(data):
         df = pro.daily_basic(ts_code=row['ts_code'], start_date=START_DATE, end_date=END_DATA)
         df.to_sql(tbname, engine, if_exists='append', index=False)
         print("download {0}:{1} success".format(tbname, row['ts_code']))
-        time.sleep(0.1)
+        time.sleep(1)
     print("download {} success".format(tbname))
     _reset_primary_key(tbname)
 
@@ -34,6 +34,7 @@ def save_stock_income(data):
     for index, row in data.iterrows():
         df = pro.income(ts_code=row['ts_code'], start_date=START_DATE, end_date=END_DATA)
         df.to_sql(tbname, engine, if_exists='append', index=False)
+        time.sleep(1)
         print("download {0}:{1} success".format(tbname, row['ts_code']))
     print("download {} success".format(tbname))
     _reset_primary_key(tbname)
@@ -44,6 +45,7 @@ def save_stock_balancesheet(data):
     for index, row in data.iterrows():
         df = pro.balancesheet(ts_code=row['ts_code'], start_date=START_DATE, end_date=END_DATA)
         df.to_sql(tbname, engine, if_exists='append', index=False)
+        time.sleep(1)
         print("download {0}:{1} success".format(tbname, row['ts_code']))
     print("download {} success".format(tbname))
     _reset_primary_key(tbname)
@@ -54,6 +56,7 @@ def save_stock_cashflow(data):
     for index, row in data.iterrows():
         df = pro.cashflow(ts_code=row['ts_code'], start_date=START_DATE, end_date=END_DATA)
         df.to_sql(tbname, engine, if_exists='append', index=False)
+        time.sleep(1)
         print("download {0}:{1} success".format(tbname, row['ts_code']))
     print("download {} success".format(tbname))
     _reset_primary_key(tbname)
@@ -65,7 +68,7 @@ def save_stock_daily(data):
         df = pro.daily(ts_code=row['ts_code'], start_date=START_DATE, end_date=END_DATA)
         df.to_sql(tbname, engine, if_exists='append', index=False)
         print("download {0}:{1} success".format(tbname, row['ts_code']))
-        time.sleep(0.1)
+        time.sleep(1)
     print("download {} success".format(tbname))
     _reset_primary_key(tbname)
 
@@ -76,7 +79,7 @@ def save_stock_adj_factor(data):
         df = pro.adj_factor(ts_code=row['ts_code'], start_date=START_DATE, end_date=END_DATA)
         df.to_sql(tbname, engine, if_exists='append', index=False)
         print("download {0}:{1} success".format(tbname, row['ts_code']))
-        time.sleep(0.1)
+        time.sleep(1)
     print("download {} success".format(tbname))
     _reset_primary_key(tbname)
 
