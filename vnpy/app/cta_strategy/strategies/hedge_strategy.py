@@ -18,14 +18,14 @@ from vnpy.app.cta_strategy.future_params import Future_Params, get_symbol_flag
 class HedgeStrategy(CtaTemplate):
     author = "用Python的交易员"
 
-    N = 7
-    X = 5
-    X1 = 5
-    Y = 5
-    Y1 = 5
-    Z = 7
-    P = 10
-    P1 = 2
+    N = 20 #最近幾天
+    X = 5 #漲幅最大的5只
+    X1 = 3 #閾值
+    Y = 5#跌幅最大的5只
+    Y1 = 3 #閾值
+    Z = 7 #持有时间
+    P = 5
+    P1 = 5
     plan = 3
 
     parameters = ["N", "X", "X1", "Y", "Y1", "Z", "P", "P1", "plan"]
@@ -112,8 +112,10 @@ class HedgeStrategy(CtaTemplate):
                 pass
             else:
                 maxbar = max(self.cache_bar[symbol][-self.N:-2], key=lambda x: x.close_price)
+                minbar = min(self.cache_bar[symbol][-self.N:-2], key=lambda x: x.close_price)
                 val = (best_bar.close_price / maxbar.close_price - 1) * 100
-                if val >= self.X1:
+                val1 = (best_bar.close_price / minbar.close_price - 1) * 100
+                if val1 >= self.X1:
                     rise.append({
                         'bar': best_bar,
                         'val': val,
@@ -206,12 +208,12 @@ class HedgeStrategy(CtaTemplate):
             return
 
         # 止损方案
-        if self.plan == 1:
-            self.loss_plan_1()
-        elif self.plan == 2:
-            self.loss_plan_2()
-        elif self.plan == 3:
-            self.loss_plan_3()
+        # if self.plan == 1:
+        #     self.loss_plan_1()
+        # elif self.plan == 2:
+        #     self.loss_plan_2()
+        # elif self.plan == 3:
+        #     self.loss_plan_3()
 
     def loss_plan_1(self):
         # 若单品种亏损超过P%（10%），则平仓该品种，同时平仓对冲品种中亏损最大的一个品种

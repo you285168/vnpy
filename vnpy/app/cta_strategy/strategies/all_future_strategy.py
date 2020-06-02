@@ -107,7 +107,7 @@ class AllFutureStrategy(CtaTemplate):
             return
         self.active_symbol[flag] = best_bar.symbol
         param = Future_Params[flag]
-        param['pos'] = int(150000 / (best_bar.close_price * param['size'] * 0.3))
+        param['pos'] = int(150000/ (best_bar.close_price * self.cta_engine.get_size() * 0.3))
         print('active symbol', best_bar.symbol)
         data = self.cache_bar[best_bar.symbol]
         self.am[flag] = ArrayManager()
@@ -198,13 +198,13 @@ class AllFutureStrategy(CtaTemplate):
                     change = True
                 print(bar.symbol, expire - bar.datetime)
             elif best_bar.volume > 0:
-                if flag not in self.change_flag and bar.volume / best_bar.volume < 0.01:
+                if flag not in self.change_flag and bar.open_interest / best_bar.open_interest < 0.1:
                     # 小于主力合约35% 下一次平仓做主力合约
                     if pos == 0:
                         change = True
                     else:
                         self.change_flag.add(flag)
-                elif bar.volume / best_bar.volume < 0.001:
+                elif bar.open_interest / best_bar.open_interest < 0.05:
                     # 小于主力合约10%平仓做主力合约
                     change = True
             if change:
