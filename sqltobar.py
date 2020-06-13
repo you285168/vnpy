@@ -79,7 +79,7 @@ Future_List = [
 ]
 
 
-# 下载股票数据
+# 期货数据
 def future_to_bar():
     engine = create_engine('mysql+pymysql://root:123@192.168.1.12/vnpy?charset=utf8')
 
@@ -124,6 +124,42 @@ def future_to_bar():
         print('save data {0} success'.format(data['symbol']))
 
 
+# 股票数据
+def stock_to_bar():
+    engine = create_engine('mysql+pymysql://root:123@192.168.1.12/vnpy?charset=utf8')
+
+    # 3. 创建表模型
+    Base = declarative_base()
+    tbname = 'dbbardata'
+
+    class BarData(Base):
+        __tablename__ = tbname
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        symbol = Column(String(32))
+        exchange = Column(String(32))
+        datetime = Column(DateTime)
+        open_price = Column(Float)
+        low_price = Column(Float)
+        high_price = Column(Float)
+        close_price = Column(Float)
+        volume = Column(Float)
+        total_turnover = Column(Float)
+        interval = Column(String(32))
+        open_interest = Column(Float)
+        turnover_rate_f = Column(Float)
+        pe = Column(Float)
+        basic_eps = Column(Float)
+        operate_profit = Column(Float)
+        n_income = Column(Float)
+
+        def __repr__(self):
+            return self.name
+
+    Base.metadata.create_all(engine)
+    pass
+
+
 if __name__ == "__main__":
     future_to_bar()
+    stock_to_bar()
     pass

@@ -230,10 +230,11 @@ class BacktestingEngine:
             self.output("起始日期必须小于结束日期")
             return
 
-        self.history_data.clear()       # Clear previously loaded history data
+        self.history_data.clear()  # Clear previously loaded history data
+        self.strategy.load_data(database_manager.get_db(), self.start, self.end)
+
 
         # Load 30 days of data each time and allow for progress update
-
         total_delta = self.end - self.start
         interval_delta = INTERVAL_DELTA_MAP[self.interval]
         progress_delta = timedelta(days=(30 * interval_delta.total_seconds() / 60))
