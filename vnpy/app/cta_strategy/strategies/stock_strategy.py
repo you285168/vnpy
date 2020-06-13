@@ -39,10 +39,12 @@ class StockStrategy(CtaTemplate):
                                              & (StockIncome.end_date >= start.strftime("%Y%m%d"))
                                              & (StockIncome.end_date <= end.strftime("%Y%m%d"))
                                              ).order_by(StockIncome.end_date)
-        for data in incomes:
-            if data.ts_code not in self.stock_income:
-                self.stock_income[data.ts_code] = []
-            self.stock_income[data.ts_code].append(data)
+        temp = [cur.__data__ for cur in incomes]
+        for data in temp:
+            ts_code = data['ts_code']
+            if  ts_code not in self.stock_income:
+                self.stock_income[ts_code] = []
+            self.stock_income[ts_code].append(data)
 
     def load_daily_basic(self, db, start, end, ts_code):
         class StockDailyBasic(Model):
@@ -59,10 +61,12 @@ class StockStrategy(CtaTemplate):
                                                 & (StockDailyBasic.trade_date <= end.strftime("%Y%m%d"))
                                                 & (StockDailyBasic.ts_code == ts_code)
                                                 ).order_by(StockDailyBasic.trade_date)
-        data = [cur.__data__ for cur in basics]
-        print(data)
+        self.stock_daily[ts_code] = [cur.__data__ for cur in basics]
 
-    def load_daily(self, db, start, end):
+    def load_daily(self, db, start, end, ts_code):
+        if ts_code not in self.stock_daily or len(self.stock_daily) <=0:
+            print('not stock daily base', ts_code)
+            return
         # 股票日表
         class StockDaily(Model):
             ts_code: str = CharField()
@@ -80,6 +84,22 @@ class StockStrategy(CtaTemplate):
                 database = db
                 table_name = 'stock_daily'
 
+        daily = StockDaily.select().where((StockDaily.trade_date >= start.strftime("%Y%m%d"))
+                                                & (StockDaily.trade_date <= end.strftime("%Y%m%d"))
+                                                & (StockDaily.ts_code == ts_code)
+                                                ).order_by(StockDaily.trade_date)
+        temp = [cur.__data__ for cur in daily]
+        day_info = self.stock_daily[ts_code]
+        for ix, data in enumerate(temp):
+            day_data = day_info[ix]
+            if day_data['trade_date'] != data['trade_data']:
+                print('stock daily error', day_data['trade_date'], data['trade_data'])
+            else:
+                day_data.update(data)
+        print(self.stock_daily)
+
+
+
     def load_data(self, db, start, end):
         self.load_income(db, start, end)
 
@@ -87,17 +107,17 @@ class StockStrategy(CtaTemplate):
         for ts_code, incomes in self.stock_income.items():
             year = 0
             for data in incomes:
-                if data.basic_eps and data.basic_eps > 0 \
-                    and data.n_income and data.n_income > 0 \
-                        and data.operate_profit and data.operate_profit > 0:
+                if getattr(data, 'basic_eps', 0) > 0 and getattr(data, 'n_income', 0) > 0 \
+                    and getattr(data, 'operate_profit', 0) > 0:
                     year += 1
                 else:
                     year = 0
                 if year >= self.Year:
-                    dd = datetime.datetime.strptime(data.end_date, "%Y%m%d")
+                    dd = datetime.datetime.strptime(data['end_date'], "%Y%m%d")
                     s = dd - datetime.timedelta(days=self.Days)
                     e = dd + datetime.timedelta(days=365)
-                    self.load_daily_basic(db, s, e, data.ts_code)
+                    self.load_daily_basic(db, s, e, data['ts_code'])
+                    self.load_daily(db, s, e, data['ts_code'])
                     pass
 
 
