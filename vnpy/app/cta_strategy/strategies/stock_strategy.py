@@ -14,8 +14,9 @@ class StockStrategy(CtaTemplate):
     stock_income = {}
     stock_daily = {}
     Year = 3
+    Days = 60
 
-    parameters = ["Year"]
+    parameters = ["Year", "Days"]
 
     def __init__(self, cta_engine, strategy_name, vt_symbol, setting):
         """"""
@@ -43,7 +44,7 @@ class StockStrategy(CtaTemplate):
                 self.stock_income[data.ts_code] = []
             self.stock_income[data.ts_code].append(data)
 
-    def load_daily_basic(self, db, start, end):
+    def load_daily_basic(self, db, start, end, ts_code):
         class StockDailyBasic(Model):
             ts_code: str = CharField()
             trade_date: str = CharField()
@@ -53,11 +54,13 @@ class StockStrategy(CtaTemplate):
             class Meta:
                 database = db
                 table_name = 'stock_daily_basic'
+                indexes = ((("trade_date", "ts_code"), True),)
         basics = StockDailyBasic.select().where((StockDailyBasic.trade_date >= start.strftime("%Y%m%d"))
                                                 & (StockDailyBasic.trade_date <= end.strftime("%Y%m%d"))
+                                                & (StockDailyBasic.ts_code == ts_code)
                                                 ).order_by(StockDailyBasic.trade_date)
-        for data in basics:
-            print(data.pe, data.turnover_rate_f)
+        data = [cur.__data__ for cur in basics]
+        print(data)
 
     def load_daily(self, db, start, end):
         # 股票日表
@@ -92,9 +95,9 @@ class StockStrategy(CtaTemplate):
                     year = 0
                 if year >= self.Year:
                     dd = datetime.datetime.strptime(data.end_date, "%Y%m%d")
-                    s = dd - datetime.timedelta(days=60)
-                    e = dd + datetime.timedelta(year=1)
-                    self.load_daily_basic(db, s, e)
+                    s = dd - datetime.timedelta(days=self.Days)
+                    e = dd + datetime.timedelta(days=365)
+                    self.load_daily_basic(db, s, e, data.ts_code)
                     pass
 
 
