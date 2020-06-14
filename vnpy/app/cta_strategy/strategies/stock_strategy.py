@@ -136,6 +136,9 @@ class StockStrategy(CtaTemplate):
     def load_data(self, db, start, end):
         self.database = db
         self.load_income(start, end)
+        date_end = datetime.date(2020, 5, 15)
+        if end > date_end:
+            end = date_end
         self.end_date = datetime.datetime.strptime(str(end), '%Y-%m-%d')
 
         # 连续N年利润大于0 加载每日数据
