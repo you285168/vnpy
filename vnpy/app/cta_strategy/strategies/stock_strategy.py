@@ -27,8 +27,13 @@ class StockStrategy(CtaTemplate):
     buy_price = 0
     StopLoss = 0.96
     AvgSell = 15
+    stock_price = {}
+    last_stock_price = {}
+    N = 3  # 计算N个有效股票
+    cur_date = None
+    end_date = None
 
-    parameters = ["Year", "AvgDays", "LastOverride", "PEmin", "PEmax", "AvgPrice", "StopLoss", "AvgSell"]
+    parameters = ["Year", "AvgDays", "LastOverride", "PEmin", "PEmax", "AvgPrice", "StopLoss", "AvgSell", "N"]
 
     def __init__(self, cta_engine, strategy_name, vt_symbol, setting):
         """"""
@@ -54,10 +59,9 @@ class StockStrategy(CtaTemplate):
         temp = [cur.__data__ for cur in incomes]
         for data in temp:
             ts_code = data['ts_code']
-            if  ts_code not in self.stock_income:
+            if ts_code not in self.stock_income:
                 self.stock_income[ts_code] = []
             self.stock_income[ts_code].append(data)
-
 
     def load_daily(self, start, end, ts_code):
         class StockDailyBasic(Model):
@@ -77,7 +81,7 @@ class StockStrategy(CtaTemplate):
         daily_basic = [cur.__data__ for cur in basics]
         if len(daily_basic) <= 0:
             print('not stock daily base', ts_code)
-            return
+            return False
         # 股票日表
         class StockDaily(Model):
             ts_code: str = CharField()
@@ -126,14 +130,18 @@ class StockStrategy(CtaTemplate):
                     cursor=ix,
                 )
                 self.stock_daily.append(bar)
+        return True
 
     def load_data(self, db, start, end):
         self.database = db
         self.load_income(start, end)
+        self.end_date = datetime.datetime.strptime(str(end), '%Y-%m-%d')
 
         # 连续N年利润大于0 加载每日数据
+        i = 0
         for ts_code, incomes in self.stock_income.items():
             year = 0
+            succ = False
             for data in incomes:
                 basic_eps = data.get('basic_eps') or 0
                 n_income = data.get('n_income') or 0
@@ -144,13 +152,17 @@ class StockStrategy(CtaTemplate):
                     year = 0
                 if year >= self.Year:
                     self.valid_income.append(data)
+                    succ = True
+            if succ:
+                i += 1
+            if i >= self.N:
+                break
         return True
 
     def is_over(self):
         return self.cursor >= len(self.valid_income)
 
     def get_history_bar(self):
-        self.stock_daily.clear()
         if self.pos > 0:
             # 还未平仓 下一条数据不是接下来的一年则继续加载下一年数据
             cur = self.valid_income[self.cursor - 1]
@@ -160,31 +172,32 @@ class StockStrategy(CtaTemplate):
                 nex = self.valid_income[self.cursor]
                 if nex['ts_code'] == cur['ts_code']:
                     nex_date = datetime.datetime.strptime(nex['end_date'], "%Y%m%d")
-                    if nex_date.year - cur_date.year == 1:
+                    if nex_date.replace(year=nex_date.year - 1) == cur_date:
                         is_nex = True
             if not is_nex:
-                start = cur_date.replace(year=cur_date.year + 1) - datetime.timedelta(days=self.AvgDays)
+                old = len(self.stock_daily)
+                start = cur_date.replace(year=cur_date.year + 1) + datetime.timedelta(days=1)
                 end = cur_date.replace(year=cur_date.year + 2)
-                self.load_daily(start, end, cur['ts_code'])
-                self.cursor += 1
-                if len(self.stock_daily) > self.AvgDays:
-                    return self.stock_daily[self.AvgDays:]
+                self.cur_date = start
+                if self.load_daily(start, end, cur['ts_code']):
+                    return self.stock_daily[old:]
                 else:
-                    # 没有数据了
-                    pass
-        else:
-            while not self.is_over():
-                data = self.valid_income[self.cursor]
-                dd = datetime.datetime.strptime(data['end_date'], "%Y%m%d")
-                start = dd - datetime.timedelta(days=self.AvgDays + 1)
-                end = dd.replace(year=dd.year + 1)
-                self.load_daily(start, end, data['ts_code'])
-                self.cursor += 1
-                if len(self.stock_daily) > 0:
-                    break
-            if len(self.stock_daily) <= self.AvgDays:
-                return None
-            return self.stock_daily[self.AvgDays:]
+                    print("not daily data")
+                    # 没有数据了 直接平仓
+                    return None
+        self.stock_daily.clear()
+        while not self.is_over():
+            data = self.valid_income[self.cursor]
+            dd = datetime.datetime.strptime(data['end_date'], "%Y%m%d")
+            start = dd - datetime.timedelta(days=self.AvgDays * 2)
+            end = dd.replace(year=dd.year + 1)
+            self.cursor += 1
+            self.cur_date = dd
+            if self.load_daily(start, end, data['ts_code']):
+                break
+        if len(self.stock_daily) <= self.AvgDays:
+            return None
+        return self.stock_daily[self.AvgDays:]
 
     def on_init(self):
         """
@@ -211,10 +224,19 @@ class StockStrategy(CtaTemplate):
         """
         Callback of new bar data update.
         """
+        if bar.datetime <= self.cur_date:
+            return
+        if bar.datetime > self.end_date:
+            return
+        last = self.stock_daily[bar.cursor - 1]
+        if bar.symbol not in self.stock_price:
+            self.stock_price[bar.symbol] = {}
+            self.last_stock_price[bar.symbol] = {}
+        self.last_stock_price[bar.symbol][bar.datetime.date()] = last.close_price
+        self.stock_price[bar.symbol][bar.datetime.date()] = bar.close_price
         self.cta_engine.set_order_bar(bar)
         if self.pos == 0:
             # 当天换手率除以昨日换手率大于等于2（参数可调
-            last = self.stock_daily[bar.cursor - 1]
             if bar.turnover_rate_f / last.turnover_rate_f < self.LastOverride:
                 return
             # 当天换手率除以前60天平均换手率大于等于2
@@ -240,11 +262,22 @@ class StockStrategy(CtaTemplate):
             self.buy(bar.close_price, pos)
             self.buy_price = bar.close_price
         else:
-            # 当日closeprice / 买入价格 < 0.9 强制以买入价格的0.96倍平仓，强制成交
-            if bar.close_price / self.buy_price < self.StopLoss:
+            if bar.datetime == self.end_date:
+                # 最后一天直接平仓
+                self.sell(bar.close_price, self.pos)
+            elif bar.close_price / self.buy_price < self.StopLoss:
+                # 当日closeprice / 买入价格 < 0.96 强制以买入价格的0.96倍平仓，强制成交
                 price = self.buy_price * self.StopLoss
                 self.sell(price, self.pos)
             else:
                 # 当日closeprice < 15日均线时卖出平仓 以收盘价平仓设置为必定成交
                 price = sum(bar.close_price for bar in self.stock_daily[bar.cursor - self.AvgSell: bar.cursor - 1]) / self.AvgSell
+                if bar.close_price < price:
+                    self.sell(bar.close_price, self.pos)
+        self.put_event()
 
+    def get_stock_price(self, symbol, date):
+        return self.stock_price[symbol].get(date, 0)
+
+    def get_last_price(self, symbol, date):
+        return self.last_stock_price[symbol].get(date, 0)
