@@ -87,6 +87,8 @@ class Exchange(Enum):
     SZSE = "SZSE"           # Shenzhen Stock Exchange
     SGE = "SGE"             # Shanghai Gold Exchange
     WXE = "WXE"             # Wuxi Steel Exchange
+    SZ = "SZ"             # Shenzhen Stock Exchange
+    SH = "SH"              # Shanghai Stock Exchange
 
     # Global
     SMART = "SMART"         # Smart Router for US stocks

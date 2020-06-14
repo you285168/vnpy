@@ -43,7 +43,7 @@ class CtaTemplate(ABC):
         self.update_setting(setting)
 
     def load_data(self, db, start, end):
-        pass
+        return False
 
     def get_new_bar_price(self, bar):
         return bar.close_price

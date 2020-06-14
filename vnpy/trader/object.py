@@ -93,6 +93,9 @@ class BarData(BaseData):
     high_price: float = 0
     low_price: float = 0
     close_price: float = 0
+    turnover_rate_f: float = 0
+    pe: float = 0
+    cursor: int = 0
 
     def __post_init__(self):
         """"""

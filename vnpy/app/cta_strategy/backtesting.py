@@ -231,8 +231,9 @@ class BacktestingEngine:
             return
 
         self.history_data.clear()  # Clear previously loaded history data
-        self.strategy.load_data(database_manager.get_db(), self.start, self.end)
-
+        if self.strategy.load_data(database_manager.get_db(), self.start, self.end):
+            self.output(f"历史数据加载完成，数据量：{len(self.history_data)}")
+            return
 
         # Load 30 days of data each time and allow for progress update
         total_delta = self.end - self.start
@@ -330,13 +331,26 @@ class BacktestingEngine:
         self.output("开始回放历史数据")
 
         # Use the rest of history data for running backtesting
-        for data in self.history_data[ix:]:
-            try:
-                func(data)
-            except Exception:
-                self.output("触发异常，回测终止")
-                self.output(traceback.format_exc())
-                return
+        if self.strategy.get_name() == "StockStrategy":
+            while not self.strategy.is_over():
+                history_data = self.strategy.get_history_bar()
+                if history_data is not None:
+                    for data in history_data:
+                        try:
+                            func(data)
+                        except Exception:
+                            self.output("触发异常，回测终止")
+                            self.output(traceback.format_exc())
+                            return
+                    history_data.clear()
+        else:
+            for data in self.history_data[ix:]:
+                try:
+                    func(data)
+                except Exception:
+                    self.output("触发异常，回测终止")
+                    self.output(traceback.format_exc())
+                    return
 
         self.output("历史数据回放结束")
 
