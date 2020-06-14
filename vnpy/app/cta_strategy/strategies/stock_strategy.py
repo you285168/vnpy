@@ -61,6 +61,11 @@ class StockStrategy(CtaTemplate):
             ts_code = data['ts_code']
             if ts_code not in self.stock_income:
                 self.stock_income[ts_code] = []
+            if len(self.stock_income[ts_code]) > 0:
+                last = self.stock_income[ts_code][-1]
+                if last['end_date'] == data['end_date']:
+                    # print('same income', ts_code, last['end_date'])
+                    continue
             self.stock_income[ts_code].append(data)
 
     def load_daily(self, start, end, ts_code):
