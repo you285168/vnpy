@@ -108,6 +108,7 @@ class StockStrategy(CtaTemplate):
         exchange = Exchange(vt_symbol[1])
 
         temp = [cur.__data__ for cur in daily]
+        old = len(self.stock_daily)
         for ix, data in enumerate(temp):
             day_data = daily_basic[ix]
             if day_data['trade_date'] != data['trade_date']:
@@ -127,7 +128,7 @@ class StockStrategy(CtaTemplate):
                     gateway_name="DB",
                     turnover_rate_f=day_data['turnover_rate_f'],
                     pe=day_data['pe'],
-                    cursor=ix,
+                    cursor=ix + old,
                 )
                 self.stock_daily.append(bar)
         return True
@@ -182,9 +183,8 @@ class StockStrategy(CtaTemplate):
                 if self.load_daily(start, end, cur['ts_code']):
                     return self.stock_daily[old:]
                 else:
-                    print("not daily data")
-                    # 没有数据了 直接平仓
-                    return None
+                    print("not daily data", str(start), str(end))
+                    # 没有数据了
         self.stock_daily.clear()
         while not self.is_over():
             data = self.valid_income[self.cursor]
@@ -226,7 +226,10 @@ class StockStrategy(CtaTemplate):
         """
         if bar.datetime <= self.cur_date:
             return
-        if bar.datetime > self.end_date:
+        if bar.datetime >= self.end_date:
+            if self.pos > 0:
+                # 最后一天直接平仓
+                self.sell(bar.close_price, self.pos)
             return
         last = self.stock_daily[bar.cursor - 1]
         if bar.symbol not in self.stock_price:
@@ -262,10 +265,7 @@ class StockStrategy(CtaTemplate):
             self.buy(bar.close_price, pos)
             self.buy_price = bar.close_price
         else:
-            if bar.datetime == self.end_date:
-                # 最后一天直接平仓
-                self.sell(bar.close_price, self.pos)
-            elif bar.close_price / self.buy_price < self.StopLoss:
+            if bar.close_price / self.buy_price < self.StopLoss:
                 # 当日closeprice / 买入价格 < 0.96 强制以买入价格的0.96倍平仓，强制成交
                 price = self.buy_price * self.StopLoss
                 self.sell(price, self.pos)
